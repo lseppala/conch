@@ -36,13 +36,10 @@ Invite a user to the current stashed C<current_workspace>
 
 sub invite ($c) {
 	my $body = $c->req->json;
+	return $c->status(403) unless $c->is_admin;
+
 	return $c->status( 400, { error => '"user" and "role " fields required ' } )
 		unless ( $body->{user} and $body->{role} );
-
-	return $c->status(403)
-		if $c->stash('current_workspace')->role eq 'Read-only';
-	return $c->status(403)
-		if $c->stash('current_workspace')->role eq 'Integrator';
 
 	my $ws = $c->stash('current_workspace');
 	my $maybe_role =
@@ -58,16 +55,8 @@ sub invite ($c) {
 
 	my $user = Conch::Model::User->lookup_by_email( $body->{user} );
 
-	if ($user) {
-		$c->mail->send_existing_user_invite(
-			{
-				email          => $user->email,
-				workspace_name => $ws->name
-			}
-		);
-	}
-	else {
-		my $password = $c->random_string( length => 10 );
+	unless ($user) {
+		my $password = $c->random_string();
 		$user = Conch::Model::User->create( $body->{user}, $password );
 		$c->mail->send_new_user_invite(
 			{ email => $user->email, password => $password } );
